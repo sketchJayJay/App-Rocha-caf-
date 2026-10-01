@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#4b180f">
+  <title>Rocha Comércio de Café</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="toast" class="toast"></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand-card">
+        <img src="/static/rocha-banner.jpeg" alt="Rocha Comércio de Café">
+      </div>
+      <nav>
+        <button class="nav-btn active" data-page="dashboard">⌂ <span>Início</span></button>
+        <button class="nav-btn" data-page="movements">⇄ <span>Entrada e Saída</span></button>
+        <button class="nav-btn" data-page="clients">♙ <span>Clientes</span></button>
+        <button class="nav-btn" data-page="stock">▦ <span>Estoque</span></button>
+        <button class="nav-btn" data-page="debts">$ <span>Saldo Devedor</span></button>
+      </nav>
+      <div class="side-foot">ROCHA · Gestão simples de café</div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">ROCHA COMÉRCIO DE CAFÉ</div>
+          <h1 id="pageTitle">Visão geral</h1>
+        </div>
+        <button id="quickMovement" class="btn primary">+ Nova movimentação</button>
+      </header>
+
+      <section id="page-dashboard" class="page active">
+        <div class="hero">
+          <div>
+            <div class="hero-kicker">Controle na palma da mão</div>
+            <h2>Entrada, saída, estoque e saldos em um só lugar.</h2>
+            <p>Uma visão limpa do que entrou, do que saiu e do que ainda precisa ser acertado.</p>
+          </div>
+          <button class="btn light" onclick="openMovementModal('entrada')">Registrar entrada</button>
+        </div>
+        <div class="stats-grid">
+          <article class="stat"><span>Estoque atual</span><strong id="dStockQty">0</strong><small>unidades cadastradas</small></article>
+          <article class="stat"><span>Valor do estoque</span><strong id="dStockValue">R$ 0,00</strong><small>pelo custo médio</small></article>
+          <article class="stat receive"><span>A receber</span><strong id="dReceive">R$ 0,00</strong><small>saldos em aberto</small></article>
+          <article class="stat pay"><span>A pagar</span><strong id="dPay">R$ 0,00</strong><small>compras pendentes</small></article>
+        </div>
+        <div class="two-col">
+          <article class="panel">
+            <div class="panel-head"><div><h3>Últimas movimentações</h3><p>Entradas e saídas recentes</p></div><button class="link-btn" onclick="goPage('movements')">Ver todas</button></div>
+            <div id="recentMovements" class="compact-list"></div>
+          </article>
+          <article class="panel">
+            <div class="panel-head"><div><h3>Resumo rápido</h3><p>Indicadores da operação</p></div></div>
+            <div class="mini-grid">
+              <div><b id="dClients">0</b><span>Clientes</span></div>
+              <div><b id="dLowStock">0</b><span>Estoque baixo</span></div>
+            </div>
+            <div class="tip"><b>Dica:</b> ao registrar uma venda ou compra com valor pendente, o saldo é criado automaticamente.</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="page-movements" class="page">
+        <div class="action-row">
+          <div class="segment"><button class="active" data-filter="all">Todas</button><button data-filter="entrada">Entradas</button><button data-filter="saida">Saídas</button></div>
+          <button class="btn primary" onclick="openMovementModal()">+ Nova movimentação</button>
+        </div>
+        <div class="panel"><div class="table-wrap"><table><thead><tr><th>Data</th><th>Tipo</th><th>Produto</th><th>Cliente</th><th>Quantidade</th><th>Valor</th></tr></thead><tbody id="movementRows"></tbody></table></div></div>
+      </section>
+
+      <section id="page-clients" class="page">
+        <div class="action-row"><input id="clientSearch" class="search" placeholder="Buscar cliente por nome, telefone ou documento"><button class="btn primary" onclick="openClientModal()">+ Novo cliente</button></div>
+        <div id="clientsGrid" class="cards-grid"></div>
+      </section>
+
+      <section id="page-stock" class="page">
+        <div class="action-row"><div><h3 class="inline-title">Itens em estoque</h3><p class="inline-sub">Cadastre cafés, tipos ou produtos que deseja controlar.</p></div><button class="btn primary" onclick="openProductModal()">+ Novo item</button></div>
+        <div class="panel"><div class="table-wrap"><table><thead><tr><th>Produto</th><th>Quantidade</th><th>Unidade</th><th>Custo médio</th><th>Preço venda</th><th>Status</th><th></th></tr></thead><tbody id="stockRows"></tbody></table></div></div>
+      </section>
+
+      <section id="page-debts" class="page">
+        <div class="action-row">
+          <div class="segment debt-seg"><button class="active" data-direction="all">Todos</button><button data-direction="receber">A receber</button><button data-direction="pagar">A pagar</button></div>
+          <button class="btn primary" onclick="openDebtModal()">+ Lançar saldo</button>
+        </div>
+        <div class="debt-summary"><div><span>Total a receber</span><b id="debtReceiveTotal">R$ 0,00</b></div><div><span>Total a pagar</span><b id="debtPayTotal">R$ 0,00</b></div></div>
+        <div id="debtsList" class="debt-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="modal hidden"><div class="modal-card"><button class="close" onclick="closeModal()">×</button><div id="modalContent"></div></div></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

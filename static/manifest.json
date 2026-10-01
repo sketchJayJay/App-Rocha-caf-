@@ -1,0 +1,9 @@
+{
+  "name":"Rocha Comércio de Café",
+  "short_name":"Rocha Café",
+  "start_url":"/",
+  "display":"standalone",
+  "background_color":"#f4f0ea",
+  "theme_color":"#4b180f",
+  "icons":[{"src":"/static/icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}
