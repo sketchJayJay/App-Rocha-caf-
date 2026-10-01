@@ -123,26 +123,95 @@ function openProductModal(id=null){
 async function deleteProduct(id){if(!confirm('Excluir este item do estoque?'))return;try{await api('/api/products/'+id,{method:'DELETE'});toast('Item excluído.');cache.products=[];loadProducts();loadDashboard()}catch(e){toast(e.message,true)}}
 
 async function ensureBase(){if(!cache.clients.length)cache.clients=await api('/api/clients');if(!cache.products.length)cache.products=await api('/api/products')}
-async function openMovementModal(type='entrada'){
+async function openMovementModal(type='entrada',id=null){
   try{
     await ensureBase();
     if(!cache.products.length){toast('Cadastre primeiro um item no estoque.',true);goPage('stock');return}
+    if(id && !cache.movements.length) cache.movements=await api('/api/movements');
+    const m=id?cache.movements.find(x=>x.id===id):null;
+    if(id && !m){toast('Movimentação não encontrada.',true);return}
     const today=new Date().toISOString().slice(0,10);
-    const productOpts=cache.products.map(p=>`<option value="${p.id}" data-cost="${p.avg_cost}" data-sale="${p.sale_price}">${esc(p.name)} · ${num(p.quantity)} ${esc(p.unit)}</option>`).join('');
-    const clientOpts='<option value="">Sem cliente / fornecedor</option>'+cache.clients.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
-    showModal(`<h2>Nova movimentação</h2><p class="sub">Entrada aumenta o estoque. Saída reduz. Se houver valor pendente, o saldo devedor nasce automaticamente.</p><form id="movementForm"><div class="form-grid"><div class="field"><label>TIPO</label><select name="movement_type" id="movType"><option value="entrada" ${type==='entrada'?'selected':''}>Entrada / Compra</option><option value="saida" ${type==='saida'?'selected':''}>Saída / Venda</option></select></div><div class="field"><label>DATA</label><input name="movement_date" type="date" value="${today}"></div><div class="field full"><label>PRODUTO</label><select name="product_id" id="movProduct">${productOpts}</select></div><div class="field"><label>QUANTIDADE</label><input name="quantity" id="movQty" inputmode="decimal" type="number" step="0.01" min="0.01" required placeholder="0,00"></div><div class="field"><label>VALOR POR UNIDADE</label><input name="unit_value" id="movUnit" inputmode="decimal" type="number" step="0.01" min="0" value="0"></div><div class="field full"><label>CLIENTE / FORNECEDOR</label><select name="client_id">${clientOpts}</select></div><div class="field"><label>JÁ PAGO / RECEBIDO</label><input name="paid_amount" id="movPaid" inputmode="decimal" type="number" step="0.01" min="0" value="0"></div><div class="field"><label>VENCIMENTO DO SALDO</label><input name="due_date" type="date"></div><div class="field full"><label>OBSERVAÇÃO</label><textarea name="notes" placeholder="Ex.: Café duro, lote 14, retirada no armazém..."></textarea></div><div class="field full"><label>TOTAL CALCULADO</label><div style="font-size:28px;font-weight:950;letter-spacing:-.04em;color:#4a1f12" id="movTotal">R$ 0,00</div></div></div><div class="modal-actions"><button type="button" class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn primary">Salvar movimentação</button></div></form>`);
-    const calcMov=()=>$('#movTotal').textContent=money((parseFloat($('#movQty').value)||0)*(parseFloat($('#movUnit').value)||0));
-    const suggest=()=>{const p=cache.products.find(x=>x.id===$('#movProduct').value);$('#movUnit').value=$('#movType').value==='entrada'?(p?.avg_cost||0):(p?.sale_price||0);calcMov()};
-    $('#movType').onchange=suggest;$('#movProduct').onchange=suggest;$('#movQty').oninput=calcMov;$('#movUnit').oninput=calcMov;suggest();
-    $('#movementForm').onsubmit=async e=>{e.preventDefault();const data=Object.fromEntries(new FormData(e.target));try{await api('/api/movements',{method:'POST',body:JSON.stringify(data)});closeModal();toast('Movimentação registrada.');cache.products=[];cache.movements=[];loadDashboard();if($('#page-movements').classList.contains('active'))loadMovements();}catch(err){toast(err.message,true)}};
+    const selectedType=m?.movement_type||type;
+    const selectedCondition=m?.payment_condition||'avista';
+    const productOpts=cache.products.map(p=>`<option value="${p.id}" ${m?.product_id===p.id?'selected':''}>${esc(p.name)} · ${num(p.quantity)} ${esc(p.unit)}</option>`).join('');
+    const clientOpts='<option value="">Sem cliente / fornecedor</option>'+cache.clients.map(c=>`<option value="${c.id}" ${m?.client_id===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
+    showModal(`<h2>${id?'Editar movimentação':'Nova movimentação'}</h2><p class="sub">${id?'Altere os dados e o sistema recalcula estoque e financeiro automaticamente.':'Na compra, o saldo a prazo entra automaticamente em A pagar. Na venda, o saldo vai para A receber.'}</p><form id="movementForm"><div class="form-grid"><div class="field"><label>TIPO</label><select name="movement_type" id="movType"><option value="entrada" ${selectedType==='entrada'?'selected':''}>Entrada / Compra</option><option value="saida" ${selectedType==='saida'?'selected':''}>Saída / Venda</option></select></div><div class="field"><label>DATA</label><input name="movement_date" type="date" value="${m?.movement_date||today}"></div><div class="field full"><label>PRODUTO</label><select name="product_id" id="movProduct">${productOpts}</select></div><div class="field"><label>QUANTIDADE</label><input name="quantity" id="movQty" inputmode="decimal" type="number" step="0.01" min="0.01" required value="${m?.quantity??''}" placeholder="0,00"></div><div class="field"><label>VALOR POR UNIDADE</label><input name="unit_value" id="movUnit" inputmode="decimal" type="number" step="0.01" min="0" value="${m?.unit_value??0}"></div><div class="field full"><label id="movPartyLabel">CLIENTE / FORNECEDOR</label><select name="client_id">${clientOpts}</select></div><div class="field"><label>CONDIÇÃO DE PAGAMENTO</label><select name="payment_condition" id="movCondition"><option value="avista" ${selectedCondition==='avista'?'selected':''}>À vista</option><option value="aprazo" ${selectedCondition==='aprazo'?'selected':''}>A prazo</option></select></div><div class="field" id="movPaidWrap"><label id="movPaidLabel">VALOR PAGO / RECEBIDO AGORA</label><input name="paid_amount" id="movPaid" inputmode="decimal" type="number" step="0.01" min="0" value="${m?.paid_amount??0}"></div><div class="field full" id="movDueWrap"><label>VENCIMENTO DO SALDO</label><input name="due_date" id="movDue" type="date" value="${m?.due_date||''}"></div><div class="field full"><label>OBSERVAÇÃO</label><textarea name="notes" placeholder="Ex.: Café duro, lote 14, retirada no armazém...">${esc(m?.notes||'')}</textarea></div><div class="field full"><div class="movement-finance-summary"><div><span id="movTotalLabel">TOTAL</span><strong id="movTotal">R$ 0,00</strong></div><div><span id="movSettledLabel">PAGO AGORA</span><strong id="movSettled">R$ 0,00</strong></div><div class="balance-box"><span id="movBalanceLabel">SALDO</span><strong id="movBalance">R$ 0,00</strong></div></div><p class="finance-hint" id="movFinanceHint"></p></div></div><div class="modal-actions"><button type="button" class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn primary">${id?'Salvar alterações':'Salvar movimentação'}</button></div></form>`);
+
+    const calcMov=()=>{
+      const total=(parseFloat($('#movQty').value)||0)*(parseFloat($('#movUnit').value)||0);
+      if($('#movCondition').value==='avista') $('#movPaid').value=total.toFixed(2);
+      const paid=Math.min(Math.max(parseFloat($('#movPaid').value)||0,0),total);
+      const balance=Math.max(total-paid,0);
+      $('#movTotal').textContent=money(total);
+      $('#movSettled').textContent=money(paid);
+      $('#movBalance').textContent=money(balance);
+    };
+    const syncLabels=()=>{
+      const isEntry=$('#movType').value==='entrada';
+      $('#movPartyLabel').textContent=isEntry?'FORNECEDOR':'CLIENTE';
+      $('#movPaidLabel').textContent=isEntry?'VALOR PAGO AO FORNECEDOR AGORA':'VALOR RECEBIDO DO CLIENTE AGORA';
+      $('#movTotalLabel').textContent=isEntry?'TOTAL DA COMPRA':'TOTAL DA VENDA';
+      $('#movSettledLabel').textContent=isEntry?'PAGO AGORA':'RECEBIDO AGORA';
+      $('#movBalanceLabel').textContent=isEntry?'SALDO A PAGAR':'SALDO A RECEBER';
+      $('#movFinanceHint').textContent=$('#movCondition').value==='avista'
+        ? (isEntry?'Compra à vista: o total fica quitado e não gera saldo para o fornecedor.':'Venda à vista: o total fica quitado e não gera saldo para o cliente.')
+        : (isEntry?'Compra a prazo: o valor restante entra automaticamente em Saldo devedor > A pagar.':'Venda a prazo: o valor restante entra automaticamente em Saldo devedor > A receber.');
+    };
+    const syncCondition=(changed=false)=>{
+      const cash=$('#movCondition').value==='avista';
+      $('#movPaid').readOnly=cash;
+      $('#movDue').disabled=cash;
+      $('#movDueWrap').classList.toggle('hidden-field',cash);
+      if(cash) $('#movDue').value='';
+      else if(changed && !id) $('#movPaid').value='0';
+      syncLabels();calcMov();
+    };
+    const suggest=()=>{
+      const p=cache.products.find(x=>x.id===$('#movProduct').value);
+      $('#movUnit').value=$('#movType').value==='entrada'?(p?.avg_cost||0):(p?.sale_price||0);
+      syncLabels();calcMov();
+    };
+    $('#movType').onchange=suggest;
+    $('#movProduct').onchange=suggest;
+    $('#movQty').oninput=calcMov;
+    $('#movUnit').oninput=calcMov;
+    $('#movPaid').oninput=calcMov;
+    let lastCondition=selectedCondition;
+    $('#movCondition').onchange=()=>{
+      const nextCondition=$('#movCondition').value;
+      if(nextCondition==='aprazo' && lastCondition==='avista') $('#movPaid').value='0';
+      lastCondition=nextCondition;
+      syncCondition(true);
+    };
+    if(id){syncCondition(false);calcMov()}else{suggest();syncCondition(false)}
+
+    $('#movementForm').onsubmit=async e=>{
+      e.preventDefault();
+      const data=Object.fromEntries(new FormData(e.target));
+      try{
+        const result=await api(id?`/api/movements/${id}`:'/api/movements',{method:id?'PUT':'POST',body:JSON.stringify(data)});
+        const saleId=id||result.id;
+        closeModal();
+        toast(id?'Movimentação atualizada.':'Movimentação registrada.');
+        cache.products=[];cache.movements=[];cache.debts=[];
+        loadDashboard();
+        if($('#page-movements').classList.contains('active'))loadMovements();
+        if($('#page-stock').classList.contains('active'))loadProducts();
+        if($('#page-debts').classList.contains('active'))loadDebts();
+        if(!id && data.movement_type==='saida') setTimeout(()=>showModal(`<h2>Venda registrada ✓</h2><p class="sub">A venda foi salva e o estoque já foi atualizado. Quer imprimir o comprovante agora?</p><div class="sale-success"><div><span>Total</span><strong>${money((parseFloat(data.quantity)||0)*(parseFloat(data.unit_value)||0))}</strong></div><div><span>Pagamento</span><strong>${data.payment_condition==='avista'?'À vista':'A prazo'}</strong></div></div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Agora não</button><button class="btn primary" onclick="printSale(${saleId})">Imprimir venda</button></div>`),120);
+      }catch(err){toast(err.message,true)}
+    };
   }catch(e){toast(e.message,true)}
 }
 
 async function loadMovements(){try{cache.movements=await api('/api/movements');renderMovements()}catch(e){toast(e.message,true)}}
+function printSale(id){
+  window.open(`/venda/${id}/imprimir`,'_blank','noopener');
+}
 function renderMovements(){
   const rows=movementFilter==='all'?cache.movements:cache.movements.filter(m=>m.movement_type===movementFilter);
-  $('#movementRows').innerHTML=rows.length?rows.map(m=>`<tr><td>${dateBR(m.movement_date)}</td><td><span class="pill ${m.movement_type==='entrada'?'in':'out'}">${m.movement_type==='entrada'?'Entrada':'Saída'}</span></td><td><b>${esc(m.product_name)}</b></td><td>${esc(m.client_name||'—')}</td><td>${num(m.quantity)} ${esc(m.unit)}</td><td><b>${money(m.total_value)}</b></td></tr>`).join(''):'<tr><td colspan="6" class="empty">Nenhuma movimentação.</td></tr>';
-  $('#movementMobile').innerHTML=rows.length?rows.map(m=>`<article class="mobile-row"><div class="mobile-row-top"><div class="mobile-row-title"><div class="mobile-row-icon ${m.movement_type==='entrada'?'in':'out'}">${ico(m.movement_type==='entrada'?'i-arrow-down':'i-arrow-up')}</div><div><h4>${esc(m.product_name)}</h4><p>${dateBR(m.movement_date)} · ${esc(m.client_name||'Sem cliente')}</p></div></div><div class="mobile-row-value">${money(m.total_value)}</div></div><div class="mobile-row-grid"><div><span>Tipo</span><strong>${m.movement_type==='entrada'?'Entrada / Compra':'Saída / Venda'}</strong></div><div><span>Quantidade</span><strong>${num(m.quantity)} ${esc(m.unit)}</strong></div></div></article>`).join(''):'<div class="empty">Nenhuma movimentação.</div>';
+  $('#movementRows').innerHTML=rows.length?rows.map(m=>`<tr><td>${dateBR(m.movement_date)}</td><td><span class="pill ${m.movement_type==='entrada'?'in':'out'}">${m.movement_type==='entrada'?'Entrada':'Saída'}</span></td><td><b>${esc(m.product_name)}</b></td><td>${esc(m.client_name||'—')}</td><td>${num(m.quantity)} ${esc(m.unit)}</td><td><b>${money(m.total_value)}</b></td><td><span class="payment-badge ${m.payment_condition==='avista'?'cash':'credit'}">${m.payment_condition==='avista'?'À vista':'A prazo'}</span>${m.balance>0.005?`<small class="payment-balance">Saldo ${money(m.balance)}</small>`:''}</td><td><div class="action-group"><button class="link-btn" onclick="openMovementModal('${m.movement_type}',${m.id})">Editar</button>${m.movement_type==='saida'?`<button class="link-btn print" onclick="printSale(${m.id})">Imprimir</button>`:''}</div></td></tr>`).join(''):'<tr><td colspan="8" class="empty">Nenhuma movimentação.</td></tr>';
+  $('#movementMobile').innerHTML=rows.length?rows.map(m=>`<article class="mobile-row"><div class="mobile-row-top"><div class="mobile-row-title"><div class="mobile-row-icon ${m.movement_type==='entrada'?'in':'out'}">${ico(m.movement_type==='entrada'?'i-arrow-down':'i-arrow-up')}</div><div><h4>${esc(m.product_name)}</h4><p>${dateBR(m.movement_date)} · ${esc(m.client_name||'Sem cliente')}</p></div></div><div class="mobile-row-value">${money(m.total_value)}</div></div><div class="mobile-row-grid"><div><span>Tipo</span><strong>${m.movement_type==='entrada'?'Entrada / Compra':'Saída / Venda'}</strong></div><div><span>Quantidade</span><strong>${num(m.quantity)} ${esc(m.unit)}</strong></div><div><span>Pagamento</span><strong>${m.payment_condition==='avista'?'À vista':'A prazo'}</strong></div><div><span>${m.movement_type==='entrada'?'A pagar':'A receber'}</span><strong>${money(m.balance||0)}</strong></div></div><div class="mobile-row-actions"><button onclick="openMovementModal('${m.movement_type}',${m.id})">Editar</button>${m.movement_type==='saida'?`<button class="print-mobile" onclick="printSale(${m.id})">Imprimir venda</button>`:''}</div></article>`).join(''):'<div class="empty">Nenhuma movimentação.</div>';
 }
 $$('.movement-seg button').forEach(b=>b.onclick=()=>{$$('.movement-seg button').forEach(x=>x.classList.remove('active'));b.classList.add('active');movementFilter=b.dataset.filter;renderMovements()});
 

@@ -1,4 +1,4 @@
-# Rocha Comércio de Café · App v2
+# Rocha Comércio de Café · App v2.2
 
 Sistema web/PWA com visual premium e experiência pensada para celular.
 
@@ -46,3 +46,18 @@ O sistema abre em modo standalone, sem a barra normal do navegador, com ícone p
 - Entrada/compra com valor ainda não pago cria saldo **a pagar**.
 - Saída/venda com valor ainda não recebido cria saldo **a receber**.
 - Também é possível lançar saldos manualmente.
+
+
+## Atualização v2.1
+- Entrada e saída agora podem ser editadas.
+- Ao editar, estoque e saldo devedor são recalculados automaticamente.
+- Mantém baixas já registradas e bloqueia alterações que deixariam estoque ou pagamentos inconsistentes.
+
+## Atualização v2.2
+- Entrada/compra agora tem condição **À vista** ou **A prazo**.
+- O formulário mostra **Total da compra**, **Pago agora** e **Saldo a pagar do fornecedor** antes de salvar.
+- Compras a prazo geram automaticamente o saldo em **A pagar**.
+- Vendas a prazo geram automaticamente o saldo em **A receber**.
+- Cada saída/venda ganhou o botão **Imprimir venda**.
+- O comprovante de venda mostra cliente, produto, quantidade, valor unitário, total, condição de pagamento, recebido e saldo pendente.
+- Após cadastrar uma nova venda, o sistema oferece imprimir o comprovante na hora.

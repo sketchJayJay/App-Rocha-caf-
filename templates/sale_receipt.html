@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#2a140d">
+  <title>Venda #{{ '%05d'|format(sale.id) }} · Rocha Café</title>
+  <style>
+    :root{--coffee:#4a2115;--coffee2:#2a140d;--green:#0c6c38;--cream:#f7f1e9;--line:#e7ddd3;--muted:#7f7067;--danger:#a23b2f}
+    *{box-sizing:border-box}body{margin:0;background:#efe8df;color:#2c211c;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;padding:28px}.toolbar{max-width:820px;margin:0 auto 14px;display:flex;justify-content:space-between;gap:10px}.toolbar button,.toolbar a{border:0;border-radius:12px;padding:11px 15px;font-weight:800;font-size:13px;text-decoration:none;cursor:pointer}.toolbar a{background:#fff;color:#4d4038;border:1px solid var(--line)}.toolbar button{background:var(--coffee);color:#fff}.sheet{width:min(820px,100%);margin:auto;background:#fff;border-radius:24px;overflow:hidden;box-shadow:0 30px 80px rgba(52,31,20,.14)}.brand{background:linear-gradient(135deg,var(--coffee2),#5b2a1a);color:#fff;padding:28px 32px;display:flex;justify-content:space-between;gap:20px;align-items:center}.brand-left{display:flex;align-items:center;gap:14px}.brand img{width:64px;height:64px;border-radius:18px;background:#fff}.brand strong{display:block;font-size:30px;letter-spacing:.02em}.brand span{display:block;color:#8de0a7;text-transform:uppercase;font-size:10px;font-weight:900;letter-spacing:.16em}.doc-title{text-align:right}.doc-title small{display:block;color:#cbb9ae;text-transform:uppercase;font-size:9px;letter-spacing:.16em;font-weight:900}.doc-title b{display:block;font-size:20px;margin-top:5px}.content{padding:28px 32px 30px}.meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.meta{background:var(--cream);border:1px solid var(--line);border-radius:14px;padding:13px}.meta span,.summary span,.client-box span{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:900}.meta strong{display:block;margin-top:4px;font-size:14px}.client-box{margin-top:18px;border:1px solid var(--line);border-radius:16px;padding:16px 18px}.client-box strong{display:block;margin-top:5px;font-size:16px}.client-extra{margin-top:5px;color:var(--muted);font-size:11px}.items{margin-top:20px;border:1px solid var(--line);border-radius:16px;overflow:hidden}.items table{width:100%;border-collapse:collapse}.items th{background:#f7f2ed;text-align:left;padding:11px 13px;font-size:9px;text-transform:uppercase;color:#8b7b71;letter-spacing:.07em}.items td{padding:15px 13px;border-top:1px solid var(--line);font-size:13px}.items th:last-child,.items td:last-child{text-align:right}.summary-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:20px}.summary{padding:15px;border-radius:15px;background:#f8f3ed;border:1px solid var(--line)}.summary strong{display:block;margin-top:5px;font-size:18px;color:var(--coffee)}.summary.balance strong{color:{{ '#0c6c38' if sale.balance|float <= 0.005 else '#a23b2f' }}}.notes{margin-top:18px;padding:15px;border:1px dashed #ccb9ad;border-radius:14px;color:#5f5148;font-size:12px;line-height:1.55}.foot{margin-top:24px;padding-top:16px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;color:#8c7d74;font-size:9px}.nonfiscal{font-weight:900;text-transform:uppercase;letter-spacing:.05em}.condition{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:900;background:{{ '#e7f4ec' if sale.payment_condition == 'avista' else '#fff0d9' }};color:{{ '#0c6c38' if sale.payment_condition == 'avista' else '#9c5b0d' }}}
+    @media(max-width:640px){body{padding:0;background:#fff}.toolbar{padding:10px;margin:0;position:sticky;top:0;background:rgba(255,255,255,.95);z-index:4}.sheet{border-radius:0;box-shadow:none}.brand{padding:22px 18px}.brand img{width:52px;height:52px;border-radius:14px}.brand strong{font-size:24px}.doc-title b{font-size:16px}.content{padding:20px 16px}.meta-grid,.summary-grid{grid-template-columns:1fr 1fr}.meta-grid .meta:first-child{grid-column:1/-1}.summary-grid .summary:first-child{grid-column:1/-1}.items{overflow-x:auto}.items table{min-width:520px}}
+    @media print{body{background:#fff;padding:0}.toolbar{display:none}.sheet{width:100%;box-shadow:none;border-radius:0}.brand{print-color-adjust:exact;-webkit-print-color-adjust:exact}.meta,.summary,.items th{print-color-adjust:exact;-webkit-print-color-adjust:exact}@page{margin:10mm}}
+  </style>
+</head>
+<body>
+  <div class="toolbar"><a href="/">← Voltar ao sistema</a><button onclick="window.print()">Imprimir / Salvar PDF</button></div>
+  <main class="sheet">
+    <header class="brand">
+      <div class="brand-left"><img src="/static/icon-192.png" alt=""><div><strong>ROCHA</strong><span>Comércio de Café</span></div></div>
+      <div class="doc-title"><small>Comprovante de venda</small><b>Venda #{{ '%05d'|format(sale.id) }}</b></div>
+    </header>
+    <section class="content">
+      <div class="meta-grid">
+        <div class="meta"><span>Data da venda</span><strong>{{ date_br(sale.movement_date) }}</strong></div>
+        <div class="meta"><span>Pagamento</span><strong><span class="condition">{{ 'À vista' if sale.payment_condition == 'avista' else 'A prazo' }}</span></strong></div>
+        <div class="meta"><span>Vencimento</span><strong>{{ date_br(sale.due_date) if sale.payment_condition == 'aprazo' else 'Quitado à vista' }}</strong></div>
+      </div>
+
+      <div class="client-box"><span>Cliente</span><strong>{{ sale.client_name or 'Cliente não informado' }}</strong>{% if sale.client_phone or sale.client_document or sale.client_city %}<div class="client-extra">{{ sale.client_phone or '' }}{% if sale.client_phone and (sale.client_document or sale.client_city) %} · {% endif %}{{ sale.client_document or '' }}{% if sale.client_document and sale.client_city %} · {% endif %}{{ sale.client_city or '' }}</div>{% endif %}</div>
+
+      <div class="items"><table><thead><tr><th>Produto</th><th>Quantidade</th><th>Valor unitário</th><th>Total</th></tr></thead><tbody><tr><td><strong>{{ sale.product_name }}</strong></td><td>{{ ('%g'|format(sale.quantity)) }} {{ sale.unit }}</td><td>{{ money_br(sale.unit_value) }}</td><td><strong>{{ money_br(sale.total_value) }}</strong></td></tr></tbody></table></div>
+
+      <div class="summary-grid">
+        <div class="summary"><span>Total da venda</span><strong>{{ money_br(sale.total_value) }}</strong></div>
+        <div class="summary"><span>Recebido</span><strong>{{ money_br(sale.settled_amount) }}</strong></div>
+        <div class="summary balance"><span>Saldo a receber</span><strong>{{ money_br(sale.balance) }}</strong></div>
+      </div>
+
+      {% if sale.notes %}<div class="notes"><strong>Observação:</strong> {{ sale.notes }}</div>{% endif %}
+      <div class="foot"><span>Emitido em {{ generated_at.strftime('%d/%m/%Y às %H:%M') }}</span><span class="nonfiscal">Controle interno · não substitui documento fiscal</span></div>
+    </section>
+  </main>
+</body>
+</html>

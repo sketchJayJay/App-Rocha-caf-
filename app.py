@@ -16,6 +16,104 @@ def db_connection():
     return conn
 
 
+
+def _table_columns(conn, table):
+    return {row['name'] for row in conn.execute(f'PRAGMA table_info({table})').fetchall()}
+
+
+def _movement_description(product_name, unit, movement_type, quantity, client_name=None):
+    text = f"{'Compra' if movement_type == 'entrada' else 'Venda'} de {quantity:g} {unit} de {product_name}"
+    if client_name:
+        text += f" - {client_name}"
+    return text
+
+
+def _money_br(value):
+    formatted = f"{float(value or 0):,.2f}"
+    return 'R$ ' + formatted.replace(',', '#').replace('.', ',').replace('#', '.')
+
+
+def _date_br(value):
+    if not value:
+        return '—'
+    try:
+        return datetime.strptime(value, '%Y-%m-%d').strftime('%d/%m/%Y')
+    except Exception:
+        return str(value)
+
+
+def _initial_cost_for_target(conn, product_id, initial_qty, target_avg):
+    """Infer an opening cost that reproduces the current average for migrated databases."""
+    qty = float(initial_qty or 0)
+    a, b = 1.0, 0.0
+    rows = conn.execute("SELECT movement_type, quantity, unit_value FROM stock_movements WHERE product_id=? ORDER BY id", (product_id,)).fetchall()
+    for row in rows:
+        q = float(row['quantity'] or 0)
+        if row['movement_type'] == 'entrada':
+            new_qty = qty + q
+            unit = float(row['unit_value'] or 0)
+            if new_qty > 0 and unit > 0:
+                factor = qty / new_qty
+                a = factor * a
+                b = factor * b + (q * unit) / new_qty
+            qty = new_qty
+        else:
+            qty -= q
+    if abs(a) > 1e-9:
+        return (float(target_avg or 0) - b) / a
+    return float(target_avg or 0)
+
+
+def _recalculate_product(conn, product_id):
+    product = conn.execute('SELECT * FROM products WHERE id=?', (product_id,)).fetchone()
+    if not product:
+        raise ValueError('Produto não encontrado')
+    qty = float(product['initial_quantity'] or 0)
+    avg = float(product['initial_cost'] or 0)
+    rows = conn.execute("SELECT movement_type, quantity, unit_value FROM stock_movements WHERE product_id=? ORDER BY id", (product_id,)).fetchall()
+    for row in rows:
+        q = float(row['quantity'] or 0)
+        unit = float(row['unit_value'] or 0)
+        if row['movement_type'] == 'entrada':
+            new_qty = qty + q
+            if new_qty > 0 and unit > 0:
+                avg = ((qty * avg) + (q * unit)) / new_qty
+            qty = new_qty
+        else:
+            qty -= q
+            if qty < -0.005:
+                raise ValueError('Essa alteração deixaria o estoque negativo. Confira a quantidade da saída.')
+    if abs(qty) < 0.005:
+        qty = 0.0
+    conn.execute('UPDATE products SET quantity=?, avg_cost=? WHERE id=?', (qty, avg, product_id))
+    return qty, avg
+
+
+def _find_or_link_movement_debt(conn, movement, product):
+    debt = conn.execute('SELECT * FROM debts WHERE movement_id=? ORDER BY id LIMIT 1', (movement['id'],)).fetchone()
+    if debt:
+        return debt
+    client_name = None
+    if movement['client_id']:
+        who = conn.execute('SELECT name FROM clients WHERE id=?', (movement['client_id'],)).fetchone()
+        client_name = who['name'] if who else None
+    description = _movement_description(product['name'], product['unit'], movement['movement_type'], float(movement['quantity']), client_name)
+    direction = 'pagar' if movement['movement_type'] == 'entrada' else 'receber'
+    if movement['client_id']:
+        candidates = conn.execute(
+            'SELECT * FROM debts WHERE movement_id IS NULL AND direction=? AND client_id=? AND ABS(original_amount-?) < 0.01 AND description=? ORDER BY id',
+            (direction, movement['client_id'], float(movement['total_value']), description)
+        ).fetchall()
+    else:
+        candidates = conn.execute(
+            'SELECT * FROM debts WHERE movement_id IS NULL AND direction=? AND client_id IS NULL AND ABS(original_amount-?) < 0.01 AND description=? ORDER BY id',
+            (direction, float(movement['total_value']), description)
+        ).fetchall()
+    if len(candidates) == 1:
+        conn.execute('UPDATE debts SET movement_id=? WHERE id=?', (movement['id'], candidates[0]['id']))
+        return conn.execute('SELECT * FROM debts WHERE id=?', (candidates[0]['id'],)).fetchone()
+    return None
+
 def init_db():
     conn = db_connection()
     conn.executescript('''
@@ -78,6 +176,47 @@ def init_db():
         FOREIGN KEY(debt_id) REFERENCES debts(id) ON DELETE CASCADE
     );
     ''')
+
+    # Lightweight migrations for databases created by earlier app versions.
+    product_cols = _table_columns(conn, 'products')
+    if 'initial_quantity' not in product_cols:
+        conn.execute('ALTER TABLE products ADD COLUMN initial_quantity REAL')
+    if 'initial_cost' not in product_cols:
+        conn.execute('ALTER TABLE products ADD COLUMN initial_cost REAL')
+
+    debt_cols = _table_columns(conn, 'debts')
+    if 'movement_id' not in debt_cols:
+        conn.execute('ALTER TABLE debts ADD COLUMN movement_id INTEGER')
+    conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_debts_movement_id ON debts(movement_id) WHERE movement_id IS NOT NULL')
+
+    movement_cols = _table_columns(conn, 'stock_movements')
+    if 'payment_condition' not in movement_cols:
+        conn.execute("ALTER TABLE stock_movements ADD COLUMN payment_condition TEXT DEFAULT 'aprazo'")
+        conn.execute("UPDATE stock_movements SET payment_condition = CASE WHEN COALESCE(paid_amount,0) >= COALESCE(total_value,0) - 0.005 THEN 'avista' ELSE 'aprazo' END")
+    else:
+        conn.execute("UPDATE stock_movements SET payment_condition = CASE WHEN COALESCE(paid_amount,0) >= COALESCE(total_value,0) - 0.005 THEN 'avista' ELSE 'aprazo' END WHERE payment_condition IS NULL OR payment_condition NOT IN ('avista','aprazo')")
+
+    # Infer an opening balance for existing products without changing their visible current balance/cost.
+    products_to_migrate = conn.execute('SELECT * FROM products WHERE initial_quantity IS NULL OR initial_cost IS NULL').fetchall()
+    for product in products_to_migrate:
+        flow = conn.execute(
+            "SELECT COALESCE(SUM(CASE WHEN movement_type='entrada' THEN quantity ELSE -quantity END),0) net FROM stock_movements WHERE product_id=?",
+            (product['id'],)
+        ).fetchone()['net']
+        opening_qty = float(product['quantity'] or 0) - float(flow or 0)
+        if abs(opening_qty) < 0.005:
+            opening_qty = 0.0
+        opening_cost = _initial_cost_for_target(conn, product['id'], opening_qty, float(product['avg_cost'] or 0))
+        conn.execute('UPDATE products SET initial_quantity=?, initial_cost=? WHERE id=?',
+                     (opening_qty, opening_cost, product['id']))
+
+    # Link automatic debts created by previous versions whenever the match is unambiguous.
+    old_movements = conn.execute('SELECT * FROM stock_movements ORDER BY id').fetchall()
+    for movement in old_movements:
+        product = conn.execute('SELECT * FROM products WHERE id=?', (movement['product_id'],)).fetchone()
+        if product:
+            _find_or_link_movement_debt(conn, movement, product)
+
     conn.commit()
     conn.close()
 
@@ -184,9 +323,11 @@ def products():
     name = (data.get('name') or '').strip()
     if not name:
         conn.close(); return jsonify({'error':'Produto é obrigatório'}), 400
-    cur = conn.execute('''INSERT INTO products(name,unit,quantity,min_stock,avg_cost,sale_price) VALUES(?,?,?,?,?,?)''',
-                       (name, data.get('unit','sacas'), float(data.get('quantity') or 0), float(data.get('min_stock') or 0),
-                        float(data.get('avg_cost') or 0), float(data.get('sale_price') or 0)))
+    initial_quantity = float(data.get('quantity') or 0)
+    initial_cost = float(data.get('avg_cost') or 0)
+    cur = conn.execute('''INSERT INTO products(name,unit,quantity,min_stock,avg_cost,sale_price,initial_quantity,initial_cost) VALUES(?,?,?,?,?,?,?,?)''',
+                       (name, data.get('unit','sacas'), initial_quantity, float(data.get('min_stock') or 0),
+                        initial_cost, float(data.get('sale_price') or 0), initial_quantity, initial_cost))
     conn.commit(); pid = cur.lastrowid; conn.close(); return jsonify({'id':pid}), 201
 
 
@@ -210,10 +351,14 @@ def movements():
     conn = db_connection()
     if request.method == 'GET':
         rows = conn.execute('''
-            SELECT sm.*, p.name product_name, p.unit, c.name client_name
+            SELECT sm.*, p.name product_name, p.unit, c.name client_name, d.due_date,
+                   COALESCE(d.paid_amount, sm.paid_amount) settled_amount,
+                   CASE WHEN d.id IS NOT NULL THEN MAX(d.original_amount-d.paid_amount,0)
+                        ELSE MAX(sm.total_value-sm.paid_amount,0) END balance
             FROM stock_movements sm
             JOIN products p ON p.id=sm.product_id
             LEFT JOIN clients c ON c.id=sm.client_id
+            LEFT JOIN debts d ON d.movement_id=sm.id
             ORDER BY sm.movement_date DESC, sm.id DESC LIMIT 150
         ''').fetchall(); conn.close()
         return jsonify([dict(r) for r in rows])
@@ -225,9 +370,10 @@ def movements():
         quantity = float(data['quantity'])
         unit_value = float(data.get('unit_value') or 0)
         paid_amount = float(data.get('paid_amount') or 0)
+        payment_condition = data.get('payment_condition') or 'aprazo'
     except Exception:
         conn.close(); return jsonify({'error':'Dados inválidos'}), 400
-    if movement_type not in ('entrada','saida') or quantity <= 0:
+    if movement_type not in ('entrada','saida') or quantity <= 0 or payment_condition not in ('avista','aprazo'):
         conn.close(); return jsonify({'error':'Movimentação inválida'}), 400
 
     product = conn.execute('SELECT * FROM products WHERE id=?',(product_id,)).fetchone()
@@ -237,34 +383,113 @@ def movements():
         conn.close(); return jsonify({'error':'Estoque insuficiente para esta saída'}), 409
 
     total = quantity * unit_value
+    if payment_condition == 'avista':
+        paid_amount = total
+    if paid_amount < 0 or paid_amount > total + 0.005:
+        conn.close(); return jsonify({'error':'O valor pago/recebido não pode ser maior que o total.'}), 400
     client_id = data.get('client_id') or None
     movement_date = data.get('movement_date') or datetime.now().strftime('%Y-%m-%d')
     notes = data.get('notes','')
 
-    cur = conn.execute('''INSERT INTO stock_movements(product_id,movement_type,quantity,unit_value,total_value,paid_amount,client_id,movement_date,notes)
-                          VALUES(?,?,?,?,?,?,?,?,?)''',
-                       (product_id,movement_type,quantity,unit_value,total,paid_amount,client_id,movement_date,notes))
+    cur = conn.execute('''INSERT INTO stock_movements(product_id,movement_type,quantity,unit_value,total_value,paid_amount,client_id,movement_date,notes,payment_condition)
+                          VALUES(?,?,?,?,?,?,?,?,?,?)''',
+                       (product_id,movement_type,quantity,unit_value,total,paid_amount,client_id,movement_date,notes,payment_condition))
 
-    if movement_type == 'entrada':
-        old_q = float(product['quantity'])
-        old_cost = float(product['avg_cost'])
-        new_q = old_q + quantity
-        new_avg = ((old_q * old_cost) + total) / new_q if new_q > 0 and unit_value > 0 else old_cost
-        conn.execute('UPDATE products SET quantity=?, avg_cost=? WHERE id=?',(new_q,new_avg,product_id))
-    else:
-        conn.execute('UPDATE products SET quantity=quantity-? WHERE id=?',(quantity,product_id))
+    mid = cur.lastrowid
+    try:
+        _recalculate_product(conn, product_id)
+    except ValueError as exc:
+        conn.rollback(); conn.close(); return jsonify({'error':str(exc)}), 409
 
     balance = max(total - paid_amount, 0)
     if balance > 0.005:
         direction = 'pagar' if movement_type == 'entrada' else 'receber'
         who = conn.execute('SELECT name FROM clients WHERE id=?',(client_id,)).fetchone() if client_id else None
-        description = f"{'Compra' if movement_type=='entrada' else 'Venda'} de {quantity:g} {product['unit']} de {product['name']}"
-        if who:
-            description += f" - {who['name']}"
-        conn.execute('INSERT INTO debts(client_id,direction,description,original_amount,paid_amount,due_date) VALUES(?,?,?,?,?,?)',
-                     (client_id,direction,description,total,paid_amount,data.get('due_date') or None))
+        description = _movement_description(product['name'], product['unit'], movement_type, quantity, who['name'] if who else None)
+        conn.execute('''INSERT INTO debts(client_id,direction,description,original_amount,paid_amount,due_date,movement_id)
+                        VALUES(?,?,?,?,?,?,?)''',
+                     (client_id,direction,description,total,paid_amount,data.get('due_date') or None,mid))
 
-    conn.commit(); mid = cur.lastrowid; conn.close(); return jsonify({'id':mid,'total':total}), 201
+    conn.commit(); conn.close(); return jsonify({'id':mid,'total':total}), 201
+
+
+@app.put('/api/movements/<int:mid>')
+def movement_update(mid):
+    data = request.get_json(force=True)
+    conn = db_connection()
+    old = conn.execute('SELECT * FROM stock_movements WHERE id=?', (mid,)).fetchone()
+    if not old:
+        conn.close(); return jsonify({'error':'Movimentação não encontrada'}), 404
+    try:
+        product_id = int(data['product_id'])
+        movement_type = data['movement_type']
+        quantity = float(data['quantity'])
+        unit_value = float(data.get('unit_value') or 0)
+        paid_amount = float(data.get('paid_amount') or 0)
+        payment_condition = data.get('payment_condition') or old['payment_condition'] or 'aprazo'
+    except Exception:
+        conn.close(); return jsonify({'error':'Dados inválidos'}), 400
+    if movement_type not in ('entrada','saida') or quantity <= 0 or unit_value < 0 or payment_condition not in ('avista','aprazo'):
+        conn.close(); return jsonify({'error':'Movimentação inválida'}), 400
+    total = quantity * unit_value
+    if paid_amount < 0 or paid_amount > total + 0.005:
+        conn.close(); return jsonify({'error':'O valor pago/recebido não pode ser maior que o total.'}), 400
+
+    product = conn.execute('SELECT * FROM products WHERE id=?', (product_id,)).fetchone()
+    if not product:
+        conn.close(); return jsonify({'error':'Produto não encontrado'}), 404
+    old_product = conn.execute('SELECT * FROM products WHERE id=?', (old['product_id'],)).fetchone()
+    client_id = data.get('client_id') or None
+    movement_date = data.get('movement_date') or old['movement_date']
+    notes = data.get('notes', '')
+    due_date = data.get('due_date') or None
+
+    linked = _find_or_link_movement_debt(conn, old, old_product)
+    extra_payments = 0.0
+    if linked:
+        extra_payments = float(conn.execute('SELECT COALESCE(SUM(amount),0) s FROM debt_payments WHERE debt_id=?',
+                                            (linked['id'],)).fetchone()['s'] or 0)
+    if payment_condition == 'avista':
+        if extra_payments > total + 0.005:
+            conn.rollback(); conn.close()
+            return jsonify({'error':'O novo total ficou menor que o valor que já foi baixado nessa movimentação.'}), 409
+        paid_amount = max(total - extra_payments, 0)
+    if paid_amount + extra_payments > total + 0.005:
+        conn.rollback(); conn.close()
+        return jsonify({'error':'O novo total ficou menor que o valor que já foi pago/baixado nessa movimentação.'}), 409
+
+    conn.execute('''UPDATE stock_movements
+                    SET product_id=?, movement_type=?, quantity=?, unit_value=?, total_value=?, paid_amount=?,
+                        client_id=?, movement_date=?, notes=?, payment_condition=?
+                    WHERE id=?''',
+                 (product_id, movement_type, quantity, unit_value, total, paid_amount,
+                  client_id, movement_date, notes, payment_condition, mid))
+
+    affected = {int(old['product_id']), int(product_id)}
+    try:
+        for pid in affected:
+            _recalculate_product(conn, pid)
+    except ValueError as exc:
+        conn.rollback(); conn.close(); return jsonify({'error':str(exc)}), 409
+
+    who = conn.execute('SELECT name FROM clients WHERE id=?', (client_id,)).fetchone() if client_id else None
+    description = _movement_description(product['name'], product['unit'], movement_type, quantity, who['name'] if who else None)
+    direction = 'pagar' if movement_type == 'entrada' else 'receber'
+    debt_paid = paid_amount + extra_payments
+    outstanding = total - debt_paid
+
+    if linked:
+        conn.execute('''UPDATE debts
+                        SET client_id=?, direction=?, description=?, original_amount=?, paid_amount=?, due_date=?, movement_id=?
+                        WHERE id=?''',
+                     (client_id, direction, description, total, debt_paid, due_date, mid, linked['id']))
+    elif outstanding > 0.005:
+        conn.execute('''INSERT INTO debts(client_id,direction,description,original_amount,paid_amount,due_date,movement_id)
+                        VALUES(?,?,?,?,?,?,?)''',
+                     (client_id, direction, description, total, paid_amount, due_date, mid))
+
+    conn.commit(); conn.close()
+    return jsonify({'ok':True,'total':total})
 
 
 @app.route('/api/debts', methods=['GET','POST'])
@@ -324,6 +549,28 @@ def client_summary(cid):
     debts=conn.execute('''SELECT *, original_amount-paid_amount balance FROM debts WHERE client_id=? ORDER BY id DESC''',(cid,)).fetchall()
     movements=conn.execute('''SELECT sm.*, p.name product_name,p.unit FROM stock_movements sm JOIN products p ON p.id=sm.product_id WHERE sm.client_id=? ORDER BY movement_date DESC,id DESC''',(cid,)).fetchall()
     conn.close(); return jsonify({'client':dict(client),'debts':[dict(r) for r in debts],'movements':[dict(r) for r in movements]})
+
+
+@app.get('/venda/<int:mid>/imprimir')
+def print_sale(mid):
+    conn = db_connection()
+    row = conn.execute('''
+        SELECT sm.*, p.name product_name, p.unit,
+               c.name client_name, c.phone client_phone, c.document client_document, c.city client_city,
+               d.due_date,
+               COALESCE(d.paid_amount, sm.paid_amount) settled_amount,
+               CASE WHEN d.id IS NOT NULL THEN MAX(d.original_amount-d.paid_amount,0)
+                    ELSE MAX(sm.total_value-sm.paid_amount,0) END balance
+        FROM stock_movements sm
+        JOIN products p ON p.id=sm.product_id
+        LEFT JOIN clients c ON c.id=sm.client_id
+        LEFT JOIN debts d ON d.movement_id=sm.id
+        WHERE sm.id=?
+    ''', (mid,)).fetchone()
+    conn.close()
+    if not row or row['movement_type'] != 'saida':
+        return 'Venda não encontrada.', 404
+    return render_template('sale_receipt.html', sale=dict(row), generated_at=datetime.now(), money_br=_money_br, date_br=_date_br)
 
 
 @app.get('/health')
