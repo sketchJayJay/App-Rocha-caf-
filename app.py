@@ -104,7 +104,16 @@ def dashboard():
         FROM debts WHERE direction='pagar' AND original_amount > paid_amount
     ''').fetchone()['value']
     clients = conn.execute('SELECT COUNT(*) c FROM clients').fetchone()['c']
+    products = conn.execute('SELECT COUNT(*) c FROM products').fetchone()['c']
     low_stock = conn.execute('SELECT COUNT(*) c FROM products WHERE min_stock > 0 AND quantity <= min_stock').fetchone()['c']
+    month_key = datetime.now().strftime('%Y-%m')
+    month_values = conn.execute('''
+        SELECT
+            COALESCE(SUM(CASE WHEN movement_type='entrada' THEN total_value ELSE 0 END),0) month_in,
+            COALESCE(SUM(CASE WHEN movement_type='saida' THEN total_value ELSE 0 END),0) month_out
+        FROM stock_movements
+        WHERE substr(movement_date,1,7)=?
+    ''', (month_key,)).fetchone()
     recent = conn.execute('''
         SELECT sm.id, sm.movement_type, sm.quantity, sm.total_value, sm.movement_date,
                p.name product_name, p.unit, c.name client_name
@@ -120,7 +129,10 @@ def dashboard():
         'to_receive': receive,
         'to_pay': pay,
         'clients': clients,
+        'products': products,
         'low_stock': low_stock,
+        'month_in': month_values['month_in'],
+        'month_out': month_values['month_out'],
         'recent': [dict(r) for r in recent]
     })
 
