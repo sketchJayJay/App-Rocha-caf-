@@ -48,8 +48,43 @@ $$('.nav-btn[data-page]').forEach(b=>b.onclick=()=>goPage(b.dataset.page));
 $('#quickMovement').onclick=()=>openMovementModal();
 
 function setToday(){
-  const el=$('#todayLabel'); if(!el) return;
-  el.textContent=new Intl.DateTimeFormat('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).format(new Date()).replace('.','');
+  const now=new Date();
+  const el=$('#todayLabel');
+  if(el) el.textContent=new Intl.DateTimeFormat('pt-BR',{weekday:'short',day:'2-digit',month:'short'}).format(now).replaceAll('.','');
+  const month=$('#currentMonthLabel');
+  if(month) month.textContent=new Intl.DateTimeFormat('pt-BR',{month:'long',year:'numeric'}).format(now).replace(/^./,c=>c.toUpperCase());
+  const greeting=$('#greetingTitle');
+  if(greeting){
+    const h=now.getHours();
+    const part=h<12?'Bom dia':h<18?'Boa tarde':'Boa noite';
+    greeting.innerHTML=`${part}. <span>O negócio está na sua mão.</span>`;
+  }
+}
+
+function compactMoney(v){
+  const n=Number(v||0);
+  if(Math.abs(n)>=1000000) return 'R$ '+(n/1000000).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mi';
+  if(Math.abs(n)>=1000) return 'R$ '+(n/1000).toLocaleString('pt-BR',{maximumFractionDigits:1})+' mil';
+  return money(n);
+}
+
+function renderExecutiveChart(series=[]){
+  const el=$('#executiveChart'); if(!el) return;
+  if(!series.length){el.innerHTML='<div class="chart-empty">O gráfico aparece após as primeiras movimentações.</div>';return}
+  const max=Math.max(1,...series.flatMap(x=>[Number(x.sales||0),Number(x.purchases||0)]));
+  const monthName=k=>new Intl.DateTimeFormat('pt-BR',{month:'short'}).format(new Date(k+'-02T12:00:00')).replace('.','').toUpperCase();
+  el.innerHTML=series.map(x=>{
+    const sh=Math.max(3,Math.round(Number(x.sales||0)/max*100));
+    const ph=Math.max(3,Math.round(Number(x.purchases||0)/max*100));
+    return `<div class="chart-month" title="${monthName(x.month)} · Vendas ${money(x.sales)} · Compras ${money(x.purchases)}"><div class="chart-bars"><i class="bar sales" style="height:${sh}%"></i><i class="bar purchases" style="height:${ph}%"></i></div><span>${monthName(x.month)}</span></div>`;
+  }).join('');
+  const pulse=$('#heroPulse');
+  if(pulse) pulse.innerHTML=series.map(x=>{const h=Math.max(8,Math.round(Number(x.sales||0)/max*100));return `<i style="height:${h}%"></i>`}).join('');
+}
+
+function openMonthlyReport(){
+  const current=new Date().toISOString().slice(0,7);
+  showModal(`<div class="modal-premium-head"><span class="premium-seal big">${ico('i-file')}</span><div><h2>Relatório executivo</h2><p class="sub">Escolha o mês e abra uma versão pronta para imprimir ou salvar em PDF.</p></div></div><div class="report-picker"><label>MÊS DO RELATÓRIO</label><input id="reportMonth" type="month" value="${current}"><div class="report-preview"><span>${ico('i-chart')}</span><div><strong>Resumo completo do período</strong><small>Compras, vendas, estoque, saldos e todas as movimentações.</small></div></div></div><div class="modal-actions"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn primary" onclick="window.open('/relatorio/mensal?month='+encodeURIComponent($('#reportMonth').value),'_blank');closeModal()">Abrir relatório</button></div>`);
 }
 
 async function loadDashboard(){
@@ -63,12 +98,28 @@ async function loadDashboard(){
     $('#dLowStock').textContent=d.low_stock||0;
     $('#dMonthIn').textContent=money(d.month_in);
     $('#dMonthOut').textContent=money(d.month_out);
+    $('#dMonthInHero').textContent=money(d.month_in);
+    $('#dMonthOutHero').textContent=money(d.month_out);
+    $('#dMonthBalance').textContent=money(d.month_balance);
+    $('#dMonthBalance').classList.toggle('negative',Number(d.month_balance||0)<0);
+    $('#dSalesCount').textContent=`${d.month_sales||0} ${Number(d.month_sales||0)===1?'venda registrada':'vendas registradas'}`;
+    $('#dAvgTicket').textContent=money(d.avg_ticket);
+    $('#dMonthSales').textContent=num(d.month_sales||0);
+    $('#dMonthEntries').textContent=num(d.month_entries||0);
+    $('#dClientsMeta').textContent=`${d.clients||0} ${Number(d.clients||0)===1?'contato':'contatos'}`;
+    const tp=d.top_product;
+    $('#dTopProduct').textContent=tp?.name||'Sem vendas ainda';
+    $('#dTopProductMeta').textContent=tp?`${num(tp.qty)} ${tp.unit} · ${money(tp.total)}`:'Aguardando movimentação';
+    const tc=d.top_client;
+    $('#dTopClient').textContent=tc?.name||'Sem vendas ainda';
+    $('#dTopClientMeta').textContent=tc?`${money(tc.total)} em vendas no mês`:'Aguardando movimentação';
+    renderExecutiveChart(d.series||[]);
     $('#recentMovements').innerHTML=d.recent.length?d.recent.map(m=>`
       <div class="activity-item">
         <div class="activity-icon ${m.movement_type==='entrada'?'in':'out'}">${ico(m.movement_type==='entrada'?'i-arrow-down':'i-arrow-up')}</div>
         <div class="activity-main"><b>${esc(m.product_name)}</b><span>${dateBR(m.movement_date)} · ${esc(m.client_name||'Sem cliente')} · ${num(m.quantity)} ${esc(m.unit)}</span></div>
-        <div class="activity-value"><strong>${money(m.total_value)}</strong><small>${m.movement_type==='entrada'?'entrada':'saída'}</small></div>
-      </div>`).join(''):'<div class="empty">Nenhuma movimentação ainda. O painel ganha vida no primeiro lançamento.</div>';
+        <div class="activity-value"><strong>${money(m.total_value)}</strong><small>${m.movement_type==='entrada'?'entrada / compra':'saída / venda'}</small></div>
+      </div>`).join(''):'<div class="empty premium-empty"><span>'+ico('i-coffee')+'</span><b>Pronto para começar.</b><small>Registre a primeira compra ou venda e o painel executivo ganha vida.</small></div>';
   }catch(e){toast(e.message,true)}
 }
 

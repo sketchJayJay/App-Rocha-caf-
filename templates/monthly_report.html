@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relatório {{ month_label }} · Rocha Café</title>
+<style>
+:root{--coffee:#4a1f12;--green:#136c43;--ink:#241812;--muted:#766a62;--line:#e8ddd2;--cream:#f6f1e9;--danger:#a43f36}
+*{box-sizing:border-box}body{margin:0;background:#eee8e1;color:var(--ink);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.page{width:210mm;min-height:297mm;margin:18px auto;background:#fff;padding:16mm 14mm 14mm;box-shadow:0 22px 70px rgba(47,28,18,.16)}
+.header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;padding-bottom:14px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:12px}.brand img{width:54px;height:54px;border-radius:16px}.brand strong{display:block;font-size:24px;letter-spacing:.08em;color:var(--coffee);line-height:1}.brand span{display:block;color:var(--green);font-size:10px;font-weight:900;letter-spacing:.1em;margin-top:5px}.meta{text-align:right}.meta small{display:block;color:#988b82;font-size:9px;letter-spacing:.1em;font-weight:900}.meta strong{display:block;font-size:18px;margin-top:4px}.meta p{margin:5px 0 0;color:#8e8178;font-size:9px}
+.title{margin:22px 0 12px}.title span{font-size:9px;color:var(--green);font-weight:900;letter-spacing:.13em}.title h1{margin:5px 0 0;font-size:30px;letter-spacing:-.04em}.title p{margin:6px 0 0;color:var(--muted);font-size:11px}
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:16px 0}.metric{border:1px solid var(--line);background:linear-gradient(145deg,#fff,#fbf7f2);border-radius:14px;padding:12px}.metric span,.metric strong,.metric small{display:block}.metric span{font-size:8px;color:#95887f;font-weight:900;letter-spacing:.08em}.metric strong{font-size:17px;margin-top:6px;letter-spacing:-.03em}.metric small{font-size:8px;color:#a09289;margin-top:4px}.metric.green strong{color:var(--green)}.metric.red strong{color:var(--danger)}
+.summary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 18px}.summary-card{border-radius:16px;padding:14px;background:#21120c;color:#fff}.summary-card.light{background:#f4eee7;color:var(--ink);border:1px solid var(--line)}.summary-card span,.summary-card strong,.summary-card small{display:block}.summary-card span{font-size:8px;letter-spacing:.1em;font-weight:900;opacity:.65}.summary-card strong{font-size:23px;margin-top:6px}.summary-card small{font-size:8px;opacity:.66;margin-top:4px}
+.section-head{display:flex;justify-content:space-between;align-items:end;margin:20px 0 8px}.section-head div span{font-size:8px;color:var(--green);font-weight:900;letter-spacing:.12em}.section-head h2{margin:4px 0 0;font-size:16px}.section-head small{font-size:8px;color:#94877e}
+table{width:100%;border-collapse:collapse;font-size:9px}th{text-align:left;color:#988b82;font-size:7px;text-transform:uppercase;letter-spacing:.08em;padding:8px 6px;border-bottom:1px solid var(--line)}td{padding:9px 6px;border-bottom:1px solid #f0e9e2;vertical-align:top}td.right,th.right{text-align:right}.badge{display:inline-block;padding:4px 6px;border-radius:999px;font-size:7px;font-weight:900}.badge.in{background:#e5f2ea;color:var(--green)}.badge.out{background:#f8e7e3;color:var(--danger)}.empty{text-align:center;color:#9a8d85;padding:30px 0}.footer{margin-top:20px;padding-top:11px;border-top:1px solid var(--line);display:flex;justify-content:space-between;color:#9a8d85;font-size:8px}.print{position:fixed;right:22px;bottom:22px;border:0;border-radius:14px;padding:12px 16px;background:var(--coffee);color:#fff;font-weight:900;cursor:pointer;box-shadow:0 14px 30px rgba(74,31,18,.25)}
+@media print{body{background:#fff}.page{margin:0;box-shadow:none;width:auto;min-height:auto;padding:10mm 10mm}.print{display:none}@page{size:A4;margin:0}}
+@media(max-width:800px){body{background:#fff}.page{width:100%;min-height:0;margin:0;padding:20px 14px;box-shadow:none}.metrics{grid-template-columns:1fr 1fr}.summary{grid-template-columns:1fr}.header{align-items:center}.meta p{display:none}.table-wrap{overflow:auto}table{min-width:720px}.print{right:14px;bottom:14px}}
+</style>
+</head>
+<body>
+<button class="print" onclick="window.print()">Imprimir / Salvar PDF</button>
+<main class="page">
+  <header class="header">
+    <div class="brand"><img src="/static/icon-192.png" alt=""><div><strong>ROCHA</strong><span>COMÉRCIO DE CAFÉ</span></div></div>
+    <div class="meta"><small>RELATÓRIO EXECUTIVO</small><strong>{{ month_label }}</strong><p>Gerado em {{ generated_at.strftime('%d/%m/%Y às %H:%M') }}</p></div>
+  </header>
+
+  <section class="title"><span>ROCHA ONE · EXECUTIVE</span><h1>Resumo mensal</h1><p>Movimentação comercial, posição de estoque e saldos em aberto.</p></section>
+
+  <section class="metrics">
+    <article class="metric"><span>COMPRAS / ENTRADAS</span><strong>{{ money_br(totals.purchases) }}</strong><small>{{ movements|selectattr('movement_type','equalto','entrada')|list|length }} lançamento(s)</small></article>
+    <article class="metric green"><span>VENDAS / SAÍDAS</span><strong>{{ money_br(totals.sales) }}</strong><small>{{ movements|selectattr('movement_type','equalto','saida')|list|length }} lançamento(s)</small></article>
+    <article class="metric"><span>ESTOQUE FÍSICO</span><strong>{{ '%.2f'|format(stock.qty)|replace('.', ',') }}</strong><small>unidades atuais</small></article>
+    <article class="metric"><span>VALOR EM ESTOQUE</span><strong>{{ money_br(stock.value) }}</strong><small>pelo custo médio</small></article>
+  </section>
+
+  <section class="summary">
+    <article class="summary-card"><span>SALDO TOTAL A RECEBER</span><strong>{{ money_br(open_receive) }}</strong><small>Valores ainda pendentes de clientes</small></article>
+    <article class="summary-card light"><span>SALDO TOTAL A PAGAR</span><strong>{{ money_br(open_pay) }}</strong><small>Compromissos ainda pendentes com fornecedores</small></article>
+  </section>
+
+  <div class="section-head"><div><span>DETALHAMENTO</span><h2>Movimentações do mês</h2></div><small>{{ movements|length }} registro(s)</small></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Data</th><th>Tipo</th><th>Produto</th><th>Cliente / fornecedor</th><th class="right">Qtd.</th><th class="right">Unitário</th><th class="right">Total</th></tr></thead>
+      <tbody>
+      {% for m in movements %}
+        <tr>
+          <td>{{ date_br(m.movement_date) }}</td>
+          <td><span class="badge {{ 'in' if m.movement_type == 'entrada' else 'out' }}">{{ 'Entrada' if m.movement_type == 'entrada' else 'Saída' }}</span></td>
+          <td><b>{{ m.product_name }}</b></td>
+          <td>{{ m.client_name or '—' }}</td>
+          <td class="right">{{ ('%.2f'|format(m.quantity)).rstrip('0').rstrip('.')|replace('.', ',') }} {{ m.unit }}</td>
+          <td class="right">{{ money_br(m.unit_value) }}</td>
+          <td class="right"><b>{{ money_br(m.total_value) }}</b></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="7" class="empty">Nenhuma movimentação registrada neste mês.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <footer class="footer"><span>Rocha Comércio de Café · Relatório gerencial</span><span>Documento gerado pelo Rocha One Executive</span></footer>
+</main>
+</body>
+</html>

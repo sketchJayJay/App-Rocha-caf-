@@ -30,6 +30,10 @@
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></symbol>
     <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
     <symbol id="i-coffee" viewBox="0 0 24 24"><path d="M4 8h12v5a6 6 0 0 1-6 6 6 6 0 0 1-6-6z"/><path d="M16 10h2a3 3 0 0 1 0 6h-3"/><path d="M7 3c0 1 1 1.5 1 2.5S7 7 7 8M11 3c0 1 1 1.5 1 2.5S11 7 11 8"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/><path d="M2 21h21"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5M9 12h6M9 16h6"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 20 6v6c0 5-3.4 8.1-8 9-4.6-.9-8-4-8-9V6z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></symbol>
   </svg>
 
   <div id="toast" class="toast" role="status"></div>
@@ -38,7 +42,7 @@
     <aside class="sidebar">
       <div class="brand-lockup">
         <div class="brand-symbol"><img src="/static/icon-192.png" alt=""></div>
-        <div><strong>ROCHA</strong><span>Comércio de Café</span></div>
+        <div><strong>ROCHA</strong><span>Comércio de Café</span><em class="executive-tag">EXECUTIVE</em></div>
       </div>
 
       <div class="nav-caption">GESTÃO</div>
@@ -50,11 +54,11 @@
         <button class="nav-btn" data-page="debts"><svg><use href="#i-wallet"/></svg><span>Saldo devedor</span></button>
       </nav>
 
-      <div class="sidebar-card">
-        <div class="sidebar-card-icon"><svg><use href="#i-coffee"/></svg></div>
-        <div><strong>Controle simples.</strong><span>Decisões mais rápidas, sem planilha espalhada.</span></div>
+      <div class="sidebar-card secure-card">
+        <div class="sidebar-card-icon"><svg><use href="#i-shield"/></svg></div>
+        <div><strong>Dados protegidos</strong><span>Banco persistente preparado para atualizações e redeploys.</span></div>
       </div>
-      <div class="side-foot">ROCHA CAFÉ · v2.2</div>
+      <div class="side-foot">ROCHA ONE · EXECUTIVE v3.0</div>
     </aside>
 
     <main>
@@ -66,52 +70,68 @@
         </div>
         <div class="top-actions">
           <button id="installApp" class="icon-button install-btn hidden" title="Instalar aplicativo"><svg><use href="#i-download"/></svg></button>
+          <button class="btn report-btn" onclick="openMonthlyReport()"><svg><use href="#i-file"/></svg><span>Relatório</span></button>
           <button id="quickMovement" class="btn primary"><svg><use href="#i-plus"/></svg><span>Nova movimentação</span></button>
         </div>
       </header>
 
       <section id="page-dashboard" class="page active">
-        <article class="hero-premium">
-          <div class="hero-glow glow-one"></div><div class="hero-glow glow-two"></div>
-          <div class="hero-copy">
-            <div class="hero-label"><span class="live-dot"></span> Operação em tempo real</div>
-            <h2>Seu café, seu caixa,<br><span>tudo no lugar.</span></h2>
-            <p>Entrada, saída, estoque e contas reunidos numa visão que dá para entender em segundos.</p>
-            <div class="hero-actions">
-              <button class="hero-action entrada" onclick="openMovementModal('entrada')"><span><svg><use href="#i-arrow-down"/></svg></span><div><small>Registrar</small><strong>Entrada</strong></div></button>
-              <button class="hero-action saida" onclick="openMovementModal('saida')"><span><svg><use href="#i-arrow-up"/></svg></span><div><small>Registrar</small><strong>Saída</strong></div></button>
+        <article class="executive-hero">
+          <div class="hero-aurora aurora-a"></div><div class="hero-aurora aurora-b"></div>
+          <div class="executive-copy">
+            <div class="executive-pill"><svg><use href="#i-star"/></svg> ROCHA ONE <span>EXECUTIVE</span></div>
+            <h2 id="greetingTitle">Seu negócio em outro nível.</h2>
+            <p>Uma visão executiva para acompanhar café, caixa, estoque e relacionamento sem perder tempo procurando informação.</p>
+            <div class="executive-actions">
+              <button class="lux-action in" onclick="openMovementModal('entrada')"><span><svg><use href="#i-arrow-down"/></svg></span><div><small>NOVA COMPRA</small><strong>Registrar entrada</strong></div></button>
+              <button class="lux-action out" onclick="openMovementModal('saida')"><span><svg><use href="#i-arrow-up"/></svg></span><div><small>NOVA VENDA</small><strong>Registrar saída</strong></div></button>
+              <button class="lux-action report" onclick="openMonthlyReport()"><span><svg><use href="#i-file"/></svg></span><div><small>GESTÃO</small><strong>Relatório mensal</strong></div></button>
             </div>
           </div>
-          <div class="hero-orbit" aria-hidden="true">
-            <div class="orbit-ring ring-a"></div><div class="orbit-ring ring-b"></div>
-            <div class="bean-mark"><img src="/static/icon-512.png" alt=""></div>
+          <div class="hero-dossier">
+            <div class="dossier-head"><div><small>DESEMPENHO DO MÊS</small><strong id="currentMonthLabel">Mês atual</strong></div><span class="dossier-live"><i></i> AO VIVO</span></div>
+            <div class="dossier-main"><span>Vendas movimentadas</span><strong id="dMonthOutHero">R$ 0,00</strong><small id="dSalesCount">0 vendas registradas</small></div>
+            <div class="dossier-split"><div><span>Compras</span><strong id="dMonthInHero">R$ 0,00</strong></div><div><span>Diferença comercial</span><strong id="dMonthBalance">R$ 0,00</strong></div></div>
+            <div id="heroPulse" class="hero-pulse" aria-label="Histórico dos últimos meses"></div>
           </div>
         </article>
 
-        <div class="section-head compact"><div><span class="section-kicker">RESUMO</span><h3>O negócio agora</h3></div><div class="today-chip"><svg><use href="#i-calendar"/></svg><span id="todayLabel">Hoje</span></div></div>
-        <div class="stats-grid">
-          <article class="stat stat-coffee"><div class="stat-top"><span class="stat-icon"><svg><use href="#i-box"/></svg></span><span class="stat-trend">Estoque</span></div><strong id="dStockQty">0</strong><small>unidades em estoque</small><div class="stat-foot"><span id="dProducts">0 itens cadastrados</span><svg><use href="#i-chevron"/></svg></div></article>
-          <article class="stat stat-value"><div class="stat-top"><span class="stat-icon"><svg><use href="#i-coffee"/></svg></span><span class="stat-trend">Patrimônio</span></div><strong id="dStockValue">R$ 0,00</strong><small>valor pelo custo médio</small><div class="stat-foot"><span>Valor imobilizado</span></div></article>
-          <article class="stat stat-receive"><div class="stat-top"><span class="stat-icon"><svg><use href="#i-arrow-down"/></svg></span><span class="stat-trend">A receber</span></div><strong id="dReceive">R$ 0,00</strong><small>saldo em aberto</small><div class="stat-foot"><span>Entradas futuras</span></div></article>
-          <article class="stat stat-pay"><div class="stat-top"><span class="stat-icon"><svg><use href="#i-arrow-up"/></svg></span><span class="stat-trend">A pagar</span></div><strong id="dPay">R$ 0,00</strong><small>compras pendentes</small><div class="stat-foot"><span>Compromissos</span></div></article>
+        <div class="executive-meta-row">
+          <div class="meta-chip"><span class="meta-dot"></span><div><small>STATUS</small><strong>Operação sincronizada</strong></div></div>
+          <div class="meta-chip"><svg><use href="#i-calendar"/></svg><div><small>HOJE</small><strong id="todayLabel">Hoje</strong></div></div>
+          <div class="meta-chip"><svg><use href="#i-users"/></svg><div><small>CARTEIRA</small><strong id="dClientsMeta">0 contatos</strong></div></div>
         </div>
 
-        <div class="dashboard-grid">
-          <article class="surface activity-surface">
-            <div class="panel-head"><div><span class="section-kicker">ATIVIDADE</span><h3>Últimas movimentações</h3></div><button class="text-button" onclick="goPage('movements')">Ver tudo <svg><use href="#i-chevron"/></svg></button></div>
-            <div id="recentMovements" class="activity-list"></div>
+        <div class="stats-grid executive-stats">
+          <article class="stat stat-coffee"><div class="stat-top"><span class="stat-icon"><svg><use href="#i-box"/></svg></span><span class="stat-trend">Estoque físico</span></div><strong id="dStockQty">0</strong><small>unidades disponíveis</small><div class="stat-foot"><span id="dProducts">0 itens cadastrados</span><svg><use href="#i-chevron"/></svg></div></article>
+          <article class="stat stat-value"><div class="stat-top"><span class="stat-icon"><svg><use href="#i-coffee"/></svg></span><span class="stat-trend">Patrimônio</span></div><strong id="dStockValue">R$ 0,00</strong><small>valor pelo custo médio</small><div class="stat-foot"><span>Capital em estoque</span></div></article>
+          <article class="stat stat-receive"><div class="stat-top"><span class="stat-icon"><svg><use href="#i-arrow-down"/></svg></span><span class="stat-trend">A receber</span></div><strong id="dReceive">R$ 0,00</strong><small>saldo aberto de clientes</small><div class="stat-foot"><span>Recebimentos futuros</span></div></article>
+          <article class="stat stat-pay"><div class="stat-top"><span class="stat-icon"><svg><use href="#i-arrow-up"/></svg></span><span class="stat-trend">A pagar</span></div><strong id="dPay">R$ 0,00</strong><small>saldo aberto com fornecedores</small><div class="stat-foot"><span>Compromissos futuros</span></div></article>
+        </div>
+
+        <div class="executive-grid">
+          <article class="surface performance-card">
+            <div class="panel-head"><div><span class="section-kicker">PERFORMANCE</span><h3>Movimentação dos últimos 6 meses</h3></div><div class="chart-legend"><span><i class="sales"></i>Vendas</span><span><i class="purchases"></i>Compras</span></div></div>
+            <div id="executiveChart" class="executive-chart"></div>
+            <div class="performance-footer"><div><span>Ticket médio de vendas</span><strong id="dAvgTicket">R$ 0,00</strong></div><div><span>Vendas neste mês</span><strong id="dMonthSales">0</strong></div><div><span>Entradas neste mês</span><strong id="dMonthEntries">0</strong></div></div>
           </article>
 
-          <div class="side-stack">
-            <article class="surface month-card">
-              <div class="panel-head"><div><span class="section-kicker">ESTE MÊS</span><h3>Fluxo movimentado</h3></div></div>
-              <div class="month-flow"><div><span class="flow-dot in"></span><div><small>Compras / entradas</small><strong id="dMonthIn">R$ 0,00</strong></div></div><div><span class="flow-dot out"></span><div><small>Vendas / saídas</small><strong id="dMonthOut">R$ 0,00</strong></div></div></div>
-            </article>
-            <article class="surface insight-card">
-              <div class="insight-icon"><svg><use href="#i-bell"/></svg></div><div><span class="section-kicker">ATENÇÃO</span><h3><b id="dLowStock">0</b> item(ns) com estoque baixo</h3><p>Confira os produtos que chegaram ao limite mínimo.</p><button class="text-button" onclick="goPage('stock')">Abrir estoque <svg><use href="#i-chevron"/></svg></button></div>
-            </article>
-          </div>
+          <article class="surface intelligence-card">
+            <div class="panel-head"><div><span class="section-kicker">INTELIGÊNCIA</span><h3>Destaques do mês</h3></div><span class="premium-seal"><svg><use href="#i-star"/></svg></span></div>
+            <div class="intelligence-list">
+              <div class="intelligence-item"><span class="intel-icon"><svg><use href="#i-coffee"/></svg></span><div><small>PRODUTO EM DESTAQUE</small><strong id="dTopProduct">Sem vendas ainda</strong><span id="dTopProductMeta">Aguardando movimentação</span></div></div>
+              <div class="intelligence-item"><span class="intel-icon green"><svg><use href="#i-users"/></svg></span><div><small>CLIENTE EM DESTAQUE</small><strong id="dTopClient">Sem vendas ainda</strong><span id="dTopClientMeta">Aguardando movimentação</span></div></div>
+              <div class="intelligence-item warning"><span class="intel-icon"><svg><use href="#i-bell"/></svg></span><div><small>ATENÇÃO AO ESTOQUE</small><strong><b id="dLowStock">0</b> item(ns) no limite</strong><button class="inline-arrow" onclick="goPage('stock')">Revisar estoque <svg><use href="#i-chevron"/></svg></button></div></div>
+            </div>
+          </article>
         </div>
+
+        <article class="surface activity-surface executive-activity">
+          <div class="panel-head"><div><span class="section-kicker">MOVIMENTAÇÃO RECENTE</span><h3>O que acabou de acontecer</h3></div><button class="text-button" onclick="goPage('movements')">Ver histórico <svg><use href="#i-chevron"/></svg></button></div>
+          <div id="recentMovements" class="activity-list"></div>
+        </article>
+
+        <div class="legacy-month-values" aria-hidden="true"><span id="dMonthIn">R$ 0,00</span><span id="dMonthOut">R$ 0,00</span></div>
       </section>
 
       <section id="page-movements" class="page">

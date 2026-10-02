@@ -1,16 +1,50 @@
-# Rocha Comércio de Café · App v2.2
+# Rocha Comércio de Café · Rocha One Executive v3.0
 
-Sistema web/PWA com visual premium e experiência pensada para celular.
+Sistema web/PWA premium para controle de entrada, saída, clientes, estoque e saldos.
 
-## O que controla
+## Destaques da versão 3.0
 
-- Entrada / compra e saída / venda
-- Cadastro de clientes e fornecedores
-- Estoque com custo médio, preço de venda e estoque mínimo
-- Saldo devedor a receber e a pagar
-- Baixas parciais ou totais
-- Dashboard com resumo do negócio e fluxo do mês
-- Instalação no Android, iPhone e computador como aplicativo
+- Dashboard executivo totalmente redesenhado
+- Gráfico dos últimos 6 meses de compras e vendas
+- Ticket médio e quantidade de vendas/entradas do mês
+- Produto e cliente em destaque no mês
+- Relatório mensal pronto para imprimir ou salvar em PDF
+- Interface mobile com aparência de aplicativo nativo
+- Compras à vista e a prazo com saldo automático do fornecedor
+- Vendas à vista e a prazo com saldo automático do cliente
+- Impressão de comprovante de venda
+- Edição de entradas e saídas com recálculo de estoque e financeiro
+- PWA para iPhone, Android e computador
+
+## Coolify
+
+**Porta interna:** `5000`
+
+### Persistência do banco
+
+A partir desta versão, o banco é gravado em:
+
+```text
+/data/rocha_cafe.db
+```
+
+No Coolify, mantenha um volume persistente com:
+
+```text
+Destination Path: /data
+```
+
+Exemplo de nome de volume:
+
+```text
+rocha-cafe-data
+```
+
+O nome do volume pode variar. O importante é o destino `/data`.
+
+### Importante ao migrar de uma versão antiga
+
+Se a versão anterior já possui dados e o banco ainda está em `/app/rocha_cafe.db`, copie esse arquivo para `/data/rocha_cafe.db` antes do primeiro redeploy desta versão. Depois disso, os próximos redeploys usam o volume persistente normalmente.
 
 ## Rodar localmente
 
@@ -21,43 +55,6 @@ python app.py
 
 Abra `http://localhost:5000`.
 
-## Coolify
+## Instalar no iPhone
 
-Use o Dockerfile do projeto.
-
-**Porta interna:** `5000`
-
-### Persistência do banco
-
-O banco SQLite fica em `/app/rocha_cafe.db`. Configure volume persistente nesse caminho, ou monte `/app` inteiro, para os dados não sumirem em um redeploy.
-
-## Instalar no celular
-
-### Android / Chrome
-O sistema oferece o botão de instalação quando o navegador permitir.
-
-### iPhone / Safari
-Abra no Safari → Compartilhar → **Adicionar à Tela de Início**.
-
-O sistema abre em modo standalone, sem a barra normal do navegador, com ícone próprio e navegação inferior de app.
-
-## Regra automática dos saldos
-
-- Entrada/compra com valor ainda não pago cria saldo **a pagar**.
-- Saída/venda com valor ainda não recebido cria saldo **a receber**.
-- Também é possível lançar saldos manualmente.
-
-
-## Atualização v2.1
-- Entrada e saída agora podem ser editadas.
-- Ao editar, estoque e saldo devedor são recalculados automaticamente.
-- Mantém baixas já registradas e bloqueia alterações que deixariam estoque ou pagamentos inconsistentes.
-
-## Atualização v2.2
-- Entrada/compra agora tem condição **À vista** ou **A prazo**.
-- O formulário mostra **Total da compra**, **Pago agora** e **Saldo a pagar do fornecedor** antes de salvar.
-- Compras a prazo geram automaticamente o saldo em **A pagar**.
-- Vendas a prazo geram automaticamente o saldo em **A receber**.
-- Cada saída/venda ganhou o botão **Imprimir venda**.
-- O comprovante de venda mostra cliente, produto, quantidade, valor unitário, total, condição de pagamento, recebido e saldo pendente.
-- Após cadastrar uma nova venda, o sistema oferece imprimir o comprovante na hora.
+Safari → Compartilhar → **Adicionar à Tela de Início**.

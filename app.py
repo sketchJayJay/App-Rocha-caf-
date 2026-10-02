@@ -1,10 +1,29 @@
 from flask import Flask, render_template, request, jsonify
 import sqlite3
+import os
+import shutil
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / 'rocha_cafe.db'
+DATA_DIR = Path(os.environ.get('ROCHA_DATA_DIR', '/data'))
+try:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    test_file = DATA_DIR / '.write-test'
+    test_file.write_text('ok')
+    test_file.unlink(missing_ok=True)
+except Exception:
+    DATA_DIR = BASE_DIR
+DB_PATH = DATA_DIR / 'rocha_cafe.db'
+LEGACY_DB_PATH = BASE_DIR / 'rocha_cafe.db'
+
+# Migração simples para instalações locais/antigas em que o arquivo legado ainda exista.
+# Em produção, /data deve ser um volume persistente no Coolify.
+if DB_PATH != LEGACY_DB_PATH and not DB_PATH.exists() and LEGACY_DB_PATH.exists():
+    try:
+        shutil.copy2(LEGACY_DB_PATH, DB_PATH)
+    except Exception:
+        pass
 
 app = Flask(__name__)
 
@@ -13,6 +32,7 @@ def db_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys = ON')
+    conn.execute('PRAGMA busy_timeout = 5000')
     return conn
 
 
@@ -261,6 +281,46 @@ def dashboard():
         LEFT JOIN clients c ON c.id=sm.client_id
         ORDER BY sm.movement_date DESC, sm.id DESC LIMIT 8
     ''').fetchall()
+
+    month_counts = conn.execute('''
+        SELECT
+          SUM(CASE WHEN movement_type='entrada' THEN 1 ELSE 0 END) entries,
+          SUM(CASE WHEN movement_type='saida' THEN 1 ELSE 0 END) sales,
+          COALESCE(AVG(CASE WHEN movement_type='saida' THEN total_value END),0) avg_ticket
+        FROM stock_movements WHERE substr(movement_date,1,7)=?
+    ''', (month_key,)).fetchone()
+
+    top_product = conn.execute('''
+        SELECT p.name, p.unit, COALESCE(SUM(sm.quantity),0) qty, COALESCE(SUM(sm.total_value),0) total
+        FROM stock_movements sm JOIN products p ON p.id=sm.product_id
+        WHERE sm.movement_type='saida' AND substr(sm.movement_date,1,7)=?
+        GROUP BY p.id ORDER BY total DESC LIMIT 1
+    ''', (month_key,)).fetchone()
+    top_client = conn.execute('''
+        SELECT c.name, COALESCE(SUM(sm.total_value),0) total
+        FROM stock_movements sm JOIN clients c ON c.id=sm.client_id
+        WHERE sm.movement_type='saida' AND substr(sm.movement_date,1,7)=?
+        GROUP BY c.id ORDER BY total DESC LIMIT 1
+    ''', (month_key,)).fetchone()
+
+    # Série dos últimos 6 meses para o gráfico executivo.
+    series = []
+    cursor = datetime.now().replace(day=1)
+    for i in range(5, -1, -1):
+        year = cursor.year
+        month = cursor.month - i
+        while month <= 0:
+            month += 12
+            year -= 1
+        key = f'{year:04d}-{month:02d}'
+        values = conn.execute('''
+            SELECT
+              COALESCE(SUM(CASE WHEN movement_type='entrada' THEN total_value ELSE 0 END),0) purchases,
+              COALESCE(SUM(CASE WHEN movement_type='saida' THEN total_value ELSE 0 END),0) sales
+            FROM stock_movements WHERE substr(movement_date,1,7)=?
+        ''', (key,)).fetchone()
+        series.append({'month': key, 'purchases': values['purchases'], 'sales': values['sales']})
+
     conn.close()
     return jsonify({
         'stock_quantity': stock['qty'],
@@ -272,6 +332,13 @@ def dashboard():
         'low_stock': low_stock,
         'month_in': month_values['month_in'],
         'month_out': month_values['month_out'],
+        'month_balance': float(month_values['month_out'] or 0) - float(month_values['month_in'] or 0),
+        'month_entries': month_counts['entries'] or 0,
+        'month_sales': month_counts['sales'] or 0,
+        'avg_ticket': month_counts['avg_ticket'] or 0,
+        'top_product': dict(top_product) if top_product else None,
+        'top_client': dict(top_client) if top_client else None,
+        'series': series,
         'recent': [dict(r) for r in recent]
     })
 
@@ -571,6 +638,41 @@ def print_sale(mid):
     if not row or row['movement_type'] != 'saida':
         return 'Venda não encontrada.', 404
     return render_template('sale_receipt.html', sale=dict(row), generated_at=datetime.now(), money_br=_money_br, date_br=_date_br)
+
+
+@app.get('/relatorio/mensal')
+def monthly_report():
+    month = request.args.get('month') or datetime.now().strftime('%Y-%m')
+    try:
+        month_date = datetime.strptime(month, '%Y-%m')
+    except ValueError:
+        return 'Mês inválido.', 400
+    conn = db_connection()
+    movements = conn.execute('''
+        SELECT sm.*, p.name product_name, p.unit, c.name client_name
+        FROM stock_movements sm
+        JOIN products p ON p.id=sm.product_id
+        LEFT JOIN clients c ON c.id=sm.client_id
+        WHERE substr(sm.movement_date,1,7)=?
+        ORDER BY sm.movement_date, sm.id
+    ''', (month,)).fetchall()
+    totals = conn.execute('''
+        SELECT
+          COALESCE(SUM(CASE WHEN movement_type='entrada' THEN total_value ELSE 0 END),0) purchases,
+          COALESCE(SUM(CASE WHEN movement_type='saida' THEN total_value ELSE 0 END),0) sales,
+          COALESCE(SUM(CASE WHEN movement_type='entrada' THEN paid_amount ELSE 0 END),0) purchases_settled,
+          COALESCE(SUM(CASE WHEN movement_type='saida' THEN paid_amount ELSE 0 END),0) sales_settled
+        FROM stock_movements WHERE substr(movement_date,1,7)=?
+    ''', (month,)).fetchone()
+    open_receive = conn.execute("SELECT COALESCE(SUM(original_amount-paid_amount),0) v FROM debts WHERE direction='receber' AND original_amount>paid_amount").fetchone()['v']
+    open_pay = conn.execute("SELECT COALESCE(SUM(original_amount-paid_amount),0) v FROM debts WHERE direction='pagar' AND original_amount>paid_amount").fetchone()['v']
+    stock = conn.execute('SELECT COALESCE(SUM(quantity),0) qty, COALESCE(SUM(quantity*avg_cost),0) value FROM products').fetchone()
+    conn.close()
+    return render_template('monthly_report.html',
+        month_label=month_date.strftime('%m/%Y'), month=month,
+        movements=[dict(r) for r in movements], totals=dict(totals),
+        open_receive=open_receive, open_pay=open_pay, stock=dict(stock),
+        generated_at=datetime.now(), money_br=_money_br, date_br=_date_br)
 
 
 @app.get('/health')
